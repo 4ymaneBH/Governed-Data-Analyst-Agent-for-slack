@@ -1,0 +1,137 @@
+version: "3.9"
+
+services:
+  # PostgreSQL with pgvector for document embeddings
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: analyst-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-analyst}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analyst_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-analyst_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analyst}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Open Policy Agent for governance
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: analyst-opa
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=info"
+      - "/policies"
+    volumes:
+      - ../policies/rego:/policies
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Ollama for local LLM
+  ollama:
+    image: ollama/ollama:latest
+    container_name: analyst-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Remove GPU section if not available - will fall back to CPU
+
+  # MCP Tool Server
+  mcp-server:
+    build:
+      context: ../services/mcp-server
+      dockerfile: Dockerfile
+    container_name: analyst-mcp-server
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-analyst}:${POSTGRES_PASSWORD:-analyst_secret}@postgres:5432/${POSTGRES_DB:-analyst_db}
+      - OPA_URL=http://opa:8181
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    volumes:
+      - ../data:/app/data:ro
+
+  # Agent Service (FastAPI + LangGraph)
+  agent:
+    build:
+      context: ../services/agent
+      dockerfile: Dockerfile
+    container_name: analyst-agent
+    ports:
+      - "8002:8002"
+    environment:
+      - MCP_SERVER_URL=http://mcp-server:8001
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-analyst}:${POSTGRES_PASSWORD:-analyst_secret}@postgres:5432/${POSTGRES_DB:-analyst_db}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - mcp-server
+      - ollama
+
+  # Slack App Service
+  slack-app:
+    build:
+      context: ../services/slack-app
+      dockerfile: Dockerfile
+    container_name: analyst-slack-app
+    ports:
+      - "3000:3000"
+    environment:
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - AGENT_URL=http://agent:8002
+      - LOG_LEVEL=INFO
+    depends_on:
+      - agent
+
+  # Admin UI
+  admin-ui:
+    build:
+      context: ../apps/admin-ui
+      dockerfile: Dockerfile
+    container_name: analyst-admin-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-analyst}:${POSTGRES_PASSWORD:-analyst_secret}@postgres:5432/${POSTGRES_DB:-analyst_db}
+      - AGENT_URL=http://agent:8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  default:
+    name: analyst-network
