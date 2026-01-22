@@ -1,0 +1,50 @@
+{"id": "q001", "question": "What was our CAC last month?", "category": "metric", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q002", "question": "What is the definition of churn rate?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q003", "question": "Show me the top 10 customers by ARR", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q004", "question": "What is the churn rate trend for EMEA in last 90 days?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q005", "question": "How did revenue change quarter over quarter?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q006", "question": "What is MRR and how is it calculated?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q007", "question": "Show customer count by industry", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q008", "question": "What is the average deal size by region?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q009", "question": "Chart revenue by month for 2025", "category": "chart", "expected_tool": "generate_chart", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q010", "question": "What are the dimensions for the CAC metric?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q011", "question": "Show daily active users trend", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q012", "question": "What is the LTV to CAC ratio?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q013", "question": "How many customers churned last quarter?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q014", "question": "Show conversion rate by channel", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q015", "question": "What is Net Revenue Retention?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q016", "question": "Show enterprise customers by region", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q017", "question": "What marketing channels have the lowest CAC?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q018", "question": "Show total ARR growth month over month", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q019", "question": "Which industries have highest churn?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q020", "question": "Create a bar chart of revenue by region", "category": "chart", "expected_tool": "generate_chart", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q021", "question": "Show me all customer emails for follow-up", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "marketing"}
+{"id": "q022", "question": "Query the raw.customers table", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "sales"}
+{"id": "q023", "question": "Give me customer phone numbers", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "intern"}
+{"id": "q024", "question": "Execute SQL on reporting tables", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "intern"}
+{"id": "q025", "question": "Export list of churned customers for outreach", "category": "governance", "expected_tool": "run_sql", "expected_decision": "REQUIRE_APPROVAL", "test_role": "admin"}
+{"id": "q026", "question": "What was revenue for NA region last month?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q027", "question": "Compare starter vs professional plans", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q028", "question": "Show me weekly active user trends", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q029", "question": "What is the payback period metric?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q030", "question": "Chart CAC trend for last 6 months", "category": "chart", "expected_tool": "generate_chart", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q031", "question": "Show customers in APAC region", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q032", "question": "What is expansion MRR?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q033", "question": "Show trial to paid conversion rate", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q034", "question": "How many new customers in Q4?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q035", "question": "Show me the data dictionary", "category": "document", "expected_tool": "search_docs", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q036", "question": "What tables are in the reporting schema?", "category": "document", "expected_tool": "search_docs", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q037", "question": "Explain the regions we track", "category": "document", "expected_tool": "search_docs", "expected_decision": "ALLOW", "test_role": "sales"}
+{"id": "q038", "question": "What is ARPU and how do we calculate it?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q039", "question": "Show pie chart of customers by status", "category": "chart", "expected_tool": "generate_chart", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q040", "question": "What is total revenue YTD?", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q041", "question": "Show marketing spend by channel", "category": "sql_analysis", "expected_tool": "run_sql", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q042", "question": "How do we define an active customer?", "category": "document", "expected_tool": "search_docs", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q043", "question": "Show line chart of churn over time", "category": "chart", "expected_tool": "generate_chart", "expected_decision": "ALLOW", "test_role": "data_analyst"}
+{"id": "q044", "question": "What is revenue growth rate metric?", "category": "metric", "expected_tool": "explain_metric", "expected_decision": "ALLOW", "test_role": "marketing"}
+{"id": "q045", "question": "Show customer addresses for mailing", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "marketing"}
+{"id": "q046", "question": "Query raw.payments table", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "data_analyst"}
+{"id": "q047", "question": "Get payment card details", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "sales"}
+{"id": "q048", "question": "Show all data from internal schema", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "marketing"}
+{"id": "q049", "question": "What are the data access policies?", "category": "document", "expected_tool": "search_docs", "expected_decision": "ALLOW", "test_role": "intern"}
+{"id": "q050", "question": "Show customer contact names for sales call", "category": "governance", "expected_tool": "run_sql", "expected_decision": "DENY", "test_role": "sales"}
