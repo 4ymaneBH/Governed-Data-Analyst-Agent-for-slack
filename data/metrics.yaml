@@ -1,0 +1,381 @@
+# Metrics Registry
+# Business metrics with definitions, formulas, and SQL templates
+
+metrics:
+  # ============================================
+  # ACQUISITION METRICS
+  # ============================================
+  - name: cac
+    display_name: Customer Acquisition Cost
+    description: Average cost to acquire a new customer, calculated as total marketing spend divided by new customers acquired
+    owner: marketing
+    formula: total_marketing_spend / new_customers
+    sql_template: |
+      SELECT 
+        date,
+        region,
+        channel,
+        SUM(marketing_spend) / NULLIF(SUM(new_customers), 0) as cac
+      FROM reporting.daily_kpis
+      WHERE date >= '{start_date}' AND date <= '{end_date}'
+        {region_filter}
+      GROUP BY date, region, channel
+      ORDER BY date DESC
+    dimensions:
+      - date
+      - region
+      - channel
+    tags:
+      - marketing
+      - acquisition
+      - cost
+
+  - name: new_customers
+    display_name: New Customers
+    description: Number of new customers acquired in a given period
+    owner: sales
+    formula: COUNT(new signups)
+    sql_template: |
+      SELECT 
+        date,
+        region,
+        SUM(new_customers) as new_customers
+      FROM reporting.daily_kpis
+      WHERE date >= '{start_date}' AND date <= '{end_date}'
+      GROUP BY date, region
+      ORDER BY date
+    dimensions:
+      - date
+      - region
+      - channel
+    tags:
+      - sales
+      - acquisition
+
+  # ============================================
+  # REVENUE METRICS
+  # ============================================
+  - name: mrr
+    display_name: Monthly Recurring Revenue
+    description: Total monthly recurring revenue from all active subscriptions
+    owner: finance
+    formula: SUM(customer_mrr) for all active customers
+    sql_template: |
+      SELECT 
+        region,
+        plan,
+        SUM(mrr) as total_mrr,
+        COUNT(*) as customer_count
+      FROM reporting.customers
+      WHERE status = 'active'
+        {region_filter}
+      GROUP BY region, plan
+    dimensions:
+      - region
+      - plan
+      - industry
+    tags:
+      - revenue
+      - finance
+      - subscription
+
+  - name: arr
+    display_name: Annual Recurring Revenue
+    description: Annualized recurring revenue, calculated as MRR × 12
+    owner: finance
+    formula: mrr * 12
+    sql_template: |
+      SELECT 
+        region,
+        SUM(arr) as total_arr
+      FROM reporting.customers
+      WHERE status = 'active'
+      GROUP BY region
+    dimensions:
+      - region
+      - plan
+      - industry
+    tags:
+      - revenue
+      - finance
+      - subscription
+
+  - name: arpu
+    display_name: Average Revenue Per User
+    description: Average monthly revenue generated per active customer
+    owner: finance
+    formula: total_mrr / active_customers
+    sql_template: |
+      SELECT 
+        region,
+        AVG(mrr) as arpu
+      FROM reporting.customers
+      WHERE status = 'active'
+      GROUP BY region
+    dimensions:
+      - region
+      - plan
+      - industry
+    tags:
+      - revenue
+      - finance
+
+  - name: revenue
+    display_name: Revenue
+    description: Total revenue for a given period
+    owner: finance
+    formula: SUM(daily_revenue)
+    sql_template: |
+      SELECT 
+        date,
+        region,
+        SUM(revenue) as total_revenue
+      FROM reporting.daily_kpis
+      WHERE date >= '{start_date}' AND date <= '{end_date}'
+      GROUP BY date, region
+      ORDER BY date
+    dimensions:
+      - date
+      - region
+      - channel
+    tags:
+      - revenue
+      - finance
+
+  # ============================================
+  # RETENTION METRICS
+  # ============================================
+  - name: churn_rate
+    display_name: Churn Rate
+    description: Percentage of customers who churned in a given period, calculated as churned customers divided by total active customers
+    owner: customer_success
+    formula: churned_customers / active_users
+    sql_template: |
+      SELECT 
+        date,
+        region,
+        SUM(churned_customers)::DECIMAL / NULLIF(SUM(active_users), 0) as churn_rate,
+        SUM(churned_customers) as churned,
+        SUM(active_users) as active
+      FROM reporting.daily_kpis
+      WHERE date >= '{start_date}' AND date <= '{end_date}'
+      GROUP BY date, region
+      ORDER BY date
+    dimensions:
+      - date
+      - region
+    tags:
+      - retention
+      - customer_success
+
+  - name: nrr
+    display_name: Net Revenue Retention
+    description: Revenue retained from existing customers including expansions minus contractions and churn. >100% indicates growth from existing customers.
+    owner: customer_success
+    formula: (starting_mrr + expansion - contraction - churn) / starting_mrr
+    sql_template: null
+    dimensions:
+      - month
+      - region
+    tags:
+      - retention
+      - revenue
+      - growth
+
+  - name: ltv
+    display_name: Customer Lifetime Value
+    description: Predicted total revenue from a customer over their entire relationship
+    owner: finance
+    formula: arpu / monthly_churn_rate
+    sql_template: |
+      WITH metrics AS (
+        SELECT 
+          AVG(mrr) as avg_mrr,
+          0.02 as churn_rate  -- Assumed 2% monthly churn
+        FROM reporting.customers
+        WHERE status = 'active'
+      )
+      SELECT avg_mrr / NULLIF(churn_rate, 0) as ltv FROM metrics
+    dimensions:
+      - region
+      - plan
+    tags:
+      - revenue
+      - finance
+      - customer_success
+
+  # ============================================
+  # ENGAGEMENT METRICS
+  # ============================================
+  - name: dau
+    display_name: Daily Active Users
+    description: Number of unique users who engaged with the product in a day
+    owner: product
+    formula: COUNT(DISTINCT active_users)
+    sql_template: |
+      SELECT 
+        date,
+        region,
+        SUM(active_users) as dau
+      FROM reporting.daily_kpis
+      WHERE date >= '{start_date}' AND date <= '{end_date}'
+      GROUP BY date, region
+      ORDER BY date
+    dimensions:
+      - date
+      - region
+    tags:
+      - engagement
+      - product
+
+  # ============================================
+  # SALES METRICS
+  # ============================================
+  - name: conversion_rate
+    display_name: Trial to Paid Conversion Rate
+    description: Percentage of trial users who convert to paid subscriptions
+    owner: sales
+    formula: paid_conversions / trial_starts
+    sql_template: |
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'active')::DECIMAL / 
+        NULLIF(COUNT(*) FILTER (WHERE status IN ('active', 'trial', 'churned')), 0) as conversion_rate
+      FROM reporting.customers
+    dimensions:
+      - region
+      - industry
+    tags:
+      - sales
+      - conversion
+
+  - name: customer_count
+    display_name: Total Customers
+    description: Total number of customers by status
+    owner: sales
+    formula: COUNT(*)
+    sql_template: |
+      SELECT 
+        status,
+        region,
+        COUNT(*) as customer_count
+      FROM reporting.customers
+      GROUP BY status, region
+    dimensions:
+      - region
+      - industry
+      - plan
+      - status
+    tags:
+      - customers
+      - sales
+
+  - name: avg_deal_size
+    display_name: Average Deal Size
+    description: Average MRR of new customers
+    owner: sales
+    formula: SUM(new_customer_mrr) / COUNT(new_customers)
+    sql_template: |
+      SELECT 
+        region,
+        AVG(mrr) as avg_deal_size
+      FROM reporting.customers
+      WHERE signup_date >= '{start_date}'
+      GROUP BY region
+    dimensions:
+      - region
+      - industry
+      - plan
+    tags:
+      - sales
+      - revenue
+
+  # ============================================
+  # EFFICIENCY METRICS
+  # ============================================
+  - name: payback_period
+    display_name: CAC Payback Period
+    description: Months required to recover customer acquisition cost
+    owner: finance
+    formula: cac / arpu
+    sql_template: null
+    dimensions:
+      - region
+      - channel
+    tags:
+      - finance
+      - marketing
+      - efficiency
+
+  - name: ltv_cac_ratio
+    display_name: LTV to CAC Ratio
+    description: Ratio of customer lifetime value to acquisition cost. Values above 3 indicate healthy unit economics.
+    owner: finance
+    formula: ltv / cac
+    sql_template: null
+    dimensions:
+      - region
+      - channel
+    tags:
+      - finance
+      - marketing
+      - efficiency
+
+  # ============================================
+  # GROWTH METRICS
+  # ============================================
+  - name: revenue_growth
+    display_name: Revenue Growth Rate
+    description: Month-over-month percentage change in revenue
+    owner: finance
+    formula: (current_revenue - previous_revenue) / previous_revenue
+    sql_template: |
+      WITH monthly AS (
+        SELECT 
+          DATE_TRUNC('month', date) as month,
+          SUM(revenue) as revenue
+        FROM reporting.daily_kpis
+        GROUP BY DATE_TRUNC('month', date)
+      )
+      SELECT 
+        month,
+        revenue,
+        LAG(revenue) OVER (ORDER BY month) as prev_revenue,
+        (revenue - LAG(revenue) OVER (ORDER BY month)) / 
+          NULLIF(LAG(revenue) OVER (ORDER BY month), 0) as growth_rate
+      FROM monthly
+      ORDER BY month DESC
+    dimensions:
+      - month
+      - region
+    tags:
+      - revenue
+      - growth
+      - finance
+
+  - name: expansion_mrr
+    display_name: Expansion MRR
+    description: Additional MRR from existing customer upgrades
+    owner: customer_success
+    formula: SUM(upgrade_mrr)
+    sql_template: null
+    dimensions:
+      - month
+      - region
+    tags:
+      - revenue
+      - growth
+      - customer_success
+
+  - name: contraction_mrr
+    display_name: Contraction MRR
+    description: Lost MRR from existing customer downgrades
+    owner: customer_success
+    formula: SUM(downgrade_mrr)
+    sql_template: null
+    dimensions:
+      - month
+      - region
+    tags:
+      - revenue
+      - churn
+      - customer_success
