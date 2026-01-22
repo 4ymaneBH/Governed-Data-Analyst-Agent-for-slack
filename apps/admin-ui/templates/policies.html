@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Policies - Governance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <a href="/" class="text-xl font-bold text-blue-400">📊 Governance Dashboard</a>
+            <div class="flex space-x-4">
+                <a href="/" class="text-gray-300 hover:text-white px-3 py-2">Dashboard</a>
+                <a href="/audit" class="text-gray-300 hover:text-white px-3 py-2">Audit Logs</a>
+                <a href="/policies" class="text-blue-400 px-3 py-2">Policies</a>
+                <a href="/approvals" class="text-gray-300 hover:text-white px-3 py-2">Approvals</a>
+            </div>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <h1 class="text-2xl font-bold mb-6">Policy Configuration</h1>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+            <h2 class="text-lg font-medium mb-4">RBAC - Tool Permissions</h2>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-gray-400 text-left">
+                        <th class="pb-3">Role</th>
+                        <th class="pb-3">run_sql</th>
+                        <th class="pb-3">search_docs</th>
+                        <th class="pb-3">explain_metric</th>
+                        <th class="pb-3">generate_chart</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2">intern</td>
+                        <td>❌</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>❌</td>
+                    </tr>
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2">marketing</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                    </tr>
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2">sales</td>
+                        <td>✅ (RLS)</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                    </tr>
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2">data_analyst</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                    </tr>
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2">admin</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                        <td>✅</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
+            <h2 class="text-lg font-medium mb-4">Approval Rules</h2>
+            <ul class="space-y-3 text-sm">
+                <li>⚠️ <strong>Raw Schema Access:</strong> Any query to raw.* requires approval</li>
+                <li>⚠️ <strong>Large Data Requests:</strong> Queries returning &gt;1000 rows require approval</li>
+                <li>⚠️ <strong>Admin PII Access:</strong> Even admins need approval for PII columns</li>
+            </ul>
+        </div>
+    </main>
+</body>
+
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approvals - Governance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div x-data="approvals()" x-init="loadApprovals()">
+        <nav class="bg-gray-800 border-b border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+                <a href="/" class="text-xl font-bold text-blue-400">📊 Governance Dashboard</a>
+                <div class="flex space-x-4">
+                    <a href="/" class="text-gray-300 hover:text-white px-3 py-2">Dashboard</a>
+                    <a href="/audit" class="text-gray-300 hover:text-white px-3 py-2">Audit Logs</a>
+                    <a href="/policies" class="text-gray-300 hover:text-white px-3 py-2">Policies</a>
+                    <a href="/approvals" class="text-blue-400 px-3 py-2">Approvals</a>
+                </div>
+            </div>
+        </nav>
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            <h1 class="text-2xl font-bold mb-6">Pending Approvals</h1>
+            <div class="bg-gray-800 rounded-lg border border-gray-700">
+                <div class="divide-y divide-gray-700">
+                    <template x-for="approval in approvalList" :key="approval.id">
+                        <div class="p-4">
+                            <div class="flex justify-between">
+                                <div>
+                                    <span class="font-mono text-blue-400" x-text="approval.tool"></span>
+                                    <span class="text-gray-500 ml-2" x-text="approval.user_id"></span>
+                                </div>
+                                <span class="text-xs text-gray-500"
+                                    x-text="new Date(approval.created_at).toLocaleString()"></span>
+                            </div>
+                            <div class="text-sm text-gray-400 mt-1" x-text="approval.reason"></div>
+                        </div>
+                    </template>
+                    <div x-show="approvalList.length === 0" class="p-8 text-center text-gray-500">
+                        No pending approvals 🎉
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        function approvals() {
+            return {
+                approvalList: [],
+                async loadApprovals() {
+                    const resp = await fetch('/api/approvals?status=pending');
+                    const data = await resp.json();
+                    this.approvalList = data.approvals || [];
+                }
+            };
+        }
+    </script>
+</body>
+
+</html>

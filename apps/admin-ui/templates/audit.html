@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs - Governance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div x-data="auditLogs()" x-init="loadLogs()">
+        <!-- Navigation -->
+        <nav class="bg-gray-800 border-b border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <a href="/" class="text-xl font-bold text-blue-400">📊 Governance Dashboard</a>
+                    </div>
+                    <div class="flex space-x-4">
+                        <a href="/" class="text-gray-300 hover:text-white px-3 py-2">Dashboard</a>
+                        <a href="/audit" class="text-blue-400 hover:text-blue-300 px-3 py-2">Audit Logs</a>
+                        <a href="/policies" class="text-gray-300 hover:text-white px-3 py-2">Policies</a>
+                        <a href="/approvals" class="text-gray-300 hover:text-white px-3 py-2">Approvals</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <h1 class="text-2xl font-bold mb-6">Audit Logs</h1>
+
+            <!-- Filters -->
+            <div class="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">User ID</label>
+                        <input type="text" x-model="filters.user_id"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm"
+                            placeholder="U001INTERN">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Tool</label>
+                        <select x-model="filters.tool"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                            <option value="">All Tools</option>
+                            <option value="run_sql">run_sql</option>
+                            <option value="search_docs">search_docs</option>
+                            <option value="explain_metric">explain_metric</option>
+                            <option value="generate_chart">generate_chart</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Decision</label>
+                        <select x-model="filters.decision"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                            <option value="">All Decisions</option>
+                            <option value="ALLOW">ALLOW</option>
+                            <option value="DENY">DENY</option>
+                            <option value="REQUIRE_APPROVAL">REQUIRE_APPROVAL</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Start Date</label>
+                        <input type="date" x-model="filters.start_date"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button @click="loadLogs()"
+                            class="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm font-medium">
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Timestamp</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">User</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Role</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Tool</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Decision</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Latency</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-300">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        <template x-for="log in logs" :key="log.log_id">
+                            <tr class="hover:bg-gray-750">
+                                <td class="px-4 py-3 text-sm text-gray-400" x-text="formatDate(log.timestamp)"></td>
+                                <td class="px-4 py-3 text-sm" x-text="log.user_id"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="px-2 py-1 rounded text-xs" :class="getRoleClass(log.role)"
+                                        x-text="log.role"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm font-mono" x-text="log.tool"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="px-2 py-1 rounded text-xs" :class="getDecisionClass(log.decision)"
+                                        x-text="log.decision"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-400">
+                                    <span x-text="log.latency_ms"></span>ms
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    <a :href="'/replay/' + log.request_id" class="text-blue-400 hover:text-blue-300">
+                                        View Replay
+                                    </a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+
+                <!-- Pagination -->
+                <div class="bg-gray-700 px-4 py-3 flex items-center justify-between">
+                    <div class="text-sm text-gray-400">
+                        Showing <span x-text="((page - 1) * pageSize) + 1"></span> to
+                        <span x-text="Math.min(page * pageSize, total)"></span> of
+                        <span x-text="total"></span> results
+                    </div>
+                    <div class="flex space-x-2">
+                        <button @click="prevPage()" :disabled="page === 1"
+                            class="px-3 py-1 bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                            Previous
+                        </button>
+                        <span class="px-3 py-1 text-gray-400">Page <span x-text="page"></span> of <span
+                                x-text="totalPages"></span></span>
+                        <button @click="nextPage()" :disabled="page >= totalPages"
+                            class="px-3 py-1 bg-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function auditLogs() {
+            return {
+                logs: [],
+                page: 1,
+                pageSize: 50,
+                total: 0,
+                totalPages: 1,
+                filters: {
+                    user_id: '',
+                    tool: '',
+                    decision: '',
+                    start_date: ''
+                },
+
+                async loadLogs() {
+                    const params = new URLSearchParams({
+                        page: this.page,
+                        page_size: this.pageSize
+                    });
+
+                    if (this.filters.user_id) params.append('user_id', this.filters.user_id);
+                    if (this.filters.tool) params.append('tool', this.filters.tool);
+                    if (this.filters.decision) params.append('decision', this.filters.decision);
+                    if (this.filters.start_date) params.append('start_date', this.filters.start_date);
+
+                    try {
+                        const response = await fetch(`/api/audit-logs?${params}`);
+                        const data = await response.json();
+                        this.logs = data.logs;
+                        this.total = data.total;
+                        this.totalPages = data.total_pages;
+                    } catch (error) {
+                        console.error('Failed to load logs:', error);
+                    }
+                },
+
+                nextPage() {
+                    if (this.page < this.totalPages) {
+                        this.page++;
+                        this.loadLogs();
+                    }
+                },
+
+                prevPage() {
+                    if (this.page > 1) {
+                        this.page--;
+                        this.loadLogs();
+                    }
+                },
+
+                formatDate(isoString) {
+                    return new Date(isoString).toLocaleString();
+                },
+
+                getDecisionClass(decision) {
+                    return {
+                        'ALLOW': 'bg-green-900 text-green-300',
+                        'DENY': 'bg-red-900 text-red-300',
+                        'REQUIRE_APPROVAL': 'bg-yellow-900 text-yellow-300'
+                    }[decision] || 'bg-gray-700 text-gray-300';
+                },
+
+                getRoleClass(role) {
+                    return {
+                        'admin': 'bg-purple-900 text-purple-300',
+                        'data_analyst': 'bg-blue-900 text-blue-300',
+                        'marketing': 'bg-green-900 text-green-300',
+                        'sales': 'bg-yellow-900 text-yellow-300',
+                        'intern': 'bg-gray-700 text-gray-300'
+                    }[role] || 'bg-gray-700 text-gray-300';
+                }
+            };
+        }
+    </script>
+</body>
+
+</html>
