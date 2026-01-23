@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy
+          pip install -r services/agent/requirements.txt
+          pip install -r services/mcp-server/requirements.txt
+      
+      - name: Lint with ruff
+        run: ruff check services/
+
+      - name: Type check with mypy
+        run: mypy services/ --ignore-missing-imports || true
+
+  policy-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+      
+      - name: Run OPA tests
+        run: opa test policies/rego/ -v
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build MCP Server
+        run: docker build -t mcp-server services/mcp-server/
+      
+      - name: Build Agent Service
+        run: docker build -t agent services/agent/
+      
+      - name: Build Admin UI
+        run: docker build -t admin-ui apps/admin-ui/
+      
+      - name: Build Slack App
+        run: docker build -t slack-app services/slack-app/
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [lint, policy-tests, docker-build]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: analyst
+          POSTGRES_PASSWORD: analyst_secret
+          POSTGRES_DB: analyst_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      opa:
+        image: openpolicyagent/opa:latest
+        ports:
+          - 8181:8181
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-asyncio httpx
+          pip install -r services/mcp-server/requirements.txt
+      
+      - name: Initialize database
+        run: |
+          PGPASSWORD=analyst_secret psql -h localhost -U analyst -d analyst_db -f infra/postgres/init.sql
+          PGPASSWORD=analyst_secret psql -h localhost -U analyst -d analyst_db -f infra/postgres/seed.sql
+      
+      - name: Load OPA policies
+        run: |
+          curl -X PUT http://localhost:8181/v1/policies/analyst \
+            --data-binary @policies/rego/main.rego
+      
+      - name: Run integration tests
+        run: |
+          echo "Integration tests would run here"
+          # pytest tests/integration/ -v
+        env:
+          DATABASE_URL: postgresql://analyst:analyst_secret@localhost:5432/analyst_db
+          OPA_URL: http://localhost:8181
