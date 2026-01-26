@@ -61,6 +61,44 @@ http_client = httpx.AsyncClient(timeout=120.0)
 
 
 # =============================================================================
+# Chart Upload Helper
+# =============================================================================
+
+async def upload_chart_to_slack(
+    client, 
+    channel_id: str, 
+    file_path: str, 
+    title: str,
+    thread_ts: str = None
+) -> Optional[str]:
+    """Upload chart image to Slack and return the file permalink."""
+    try:
+        if not file_path or not os.path.exists(file_path):
+            logger.warning("Chart file not found", path=file_path)
+            return None
+        
+        result = await client.files_upload_v2(
+            channel=channel_id,
+            file=file_path,
+            title=title,
+            initial_comment="📊 Here's your chart!",
+            thread_ts=thread_ts
+        )
+        
+        if result.get("ok"):
+            permalink = result.get("file", {}).get("permalink", "")
+            logger.info("Chart uploaded to Slack", permalink=permalink)
+            return permalink
+        else:
+            logger.error("Slack file upload failed", error=result.get("error"))
+            return None
+            
+    except Exception as e:
+        logger.error("Chart upload failed", error=str(e))
+        return None
+
+
+# =============================================================================
 # Block Kit Templates
 # =============================================================================
 
@@ -525,11 +563,23 @@ async def handle_askdata_command(ack, command, client, respond):
         confidence=result.get("confidence", 0.0)
     )
     
-    await client.chat_postMessage(
+    # Send main response
+    response_msg = await client.chat_postMessage(
         channel=channel_id,
         blocks=blocks,
         text=result.get("answer_text", "Data analysis complete")[:200]
     )
+    
+    # Upload chart if available
+    chart_path = result.get("chart_url")
+    if chart_path:
+        await upload_chart_to_slack(
+            client=client,
+            channel_id=channel_id,
+            file_path=chart_path,
+            title=question[:50] + ("..." if len(question) > 50 else ""),
+            thread_ts=response_msg.get("ts")  # Reply in thread
+        )
 
 
 @app.action("show_sql")

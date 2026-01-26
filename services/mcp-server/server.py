@@ -5,10 +5,13 @@ with full policy enforcement via OPA and audit logging.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
+import shutil
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -18,6 +21,7 @@ from typing import Any, Optional
 import asyncpg
 import httpx
 import structlog
+import vl_convert as vlc
 from fastapi import FastAPI, HTTPException
 from mcp.server import Server
 from mcp.server.fastapi import create_mcp_router
@@ -657,9 +661,10 @@ async def execute_generate_chart(
     x_field: str,
     y_field: str,
     color_field: Optional[str],
-    ctx: ToolContext
+    ctx: ToolContext,
+    render_image: bool = True
 ) -> ChartSpec:
-    """Generate Vega-Lite chart specification."""
+    """Generate Vega-Lite chart specification and optionally render to PNG."""
     start_time = time.time()
     
     # Evaluate policy
@@ -679,39 +684,97 @@ async def execute_generate_chart(
         )
         raise HTTPException(status_code=403, detail=decision.reason)
     
-    # Build Vega-Lite spec
+    # Infer x-axis type (temporal for date fields, nominal otherwise)
+    x_type = "nominal"
+    if data and len(data) > 0:
+        sample_value = data[0].get(x_field)
+        if isinstance(sample_value, str) and (
+            "-" in str(sample_value) or "/" in str(sample_value)
+        ):
+            # Likely a date string
+            x_type = "temporal"
+    
+    # Build Vega-Lite spec with better styling
     spec = {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-        "title": title,
+        "title": {
+            "text": title,
+            "fontSize": 16,
+            "fontWeight": "bold"
+        },
         "width": 600,
         "height": 400,
         "data": {"values": data},
-        "mark": chart_type,
+        "mark": {
+            "type": chart_type,
+            "tooltip": True
+        },
         "encoding": {
-            "x": {"field": x_field, "type": "nominal"},
-            "y": {"field": y_field, "type": "quantitative"}
+            "x": {
+                "field": x_field, 
+                "type": x_type,
+                "axis": {"labelAngle": -45}
+            },
+            "y": {
+                "field": y_field, 
+                "type": "quantitative",
+                "axis": {"format": "~s"}
+            }
+        },
+        "config": {
+            "background": "#ffffff",
+            "view": {"stroke": "transparent"}
         }
     }
     
     if color_field:
         spec["encoding"]["color"] = {"field": color_field, "type": "nominal"}
     
-    # Create data hash for replay
-    import hashlib
+    # Create data hash for replay/caching
     data_hash = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:16]
+    
+    # Render to PNG if requested
+    artifact_url = None
+    if render_image:
+        try:
+            # Create charts directory if not exists
+            charts_dir = os.path.join(os.path.dirname(__file__), "charts")
+            os.makedirs(charts_dir, exist_ok=True)
+            
+            # Generate unique filename
+            chart_filename = f"chart_{ctx.request_id[:8]}_{data_hash}.png"
+            chart_path = os.path.join(charts_dir, chart_filename)
+            
+            # Render Vega-Lite to PNG using vl-convert
+            png_data = vlc.vegalite_to_png(
+                vl_spec=json.dumps(spec),
+                scale=2  # 2x resolution for clarity
+            )
+            
+            # Write to file
+            with open(chart_path, "wb") as f:
+                f.write(png_data)
+            
+            artifact_url = chart_path
+            logger.info("Chart rendered", path=chart_path, size=len(png_data))
+            
+        except Exception as e:
+            logger.error("Chart rendering failed", error=str(e))
+            # Continue without image - spec is still valid
     
     result = ChartSpec(
         chart_type=chart_type,
         title=title,
         vega_lite_spec=spec,
-        data_hash=data_hash
+        data_hash=data_hash,
+        artifact_url=artifact_url
     )
     
     latency_ms = int((time.time() - start_time) * 1000)
     await AuditLogger.log(
         ctx, "generate_chart",
         {"chart_type": chart_type, "title": title, "data_points": len(data)},
-        {"data_hash": data_hash},
+        {"data_hash": data_hash, "rendered": artifact_url is not None},
         decision, latency_ms
     )
     
@@ -973,6 +1036,57 @@ async def api_explain_metric(
     return await execute_explain_metric(metric_name, ctx)
 
 
+class ChartRequest(BaseModel):
+    """Request body for chart generation."""
+    chart_type: str
+    data: list[dict]
+    title: str
+    x_field: str
+    y_field: str
+    color_field: Optional[str] = None
+    user_id: str
+    slack_user_id: str
+    role: str
+    region: Optional[str] = None
+    request_id: Optional[str] = None
+
+
+@app.post("/api/generate_chart")
+async def api_generate_chart(request: ChartRequest):
+    """REST endpoint for chart generation with image rendering."""
+    ctx = ToolContext(
+        request_id=request.request_id or str(uuid.uuid4()),
+        user_id=request.user_id,
+        slack_user_id=request.slack_user_id,
+        role=request.role,
+        region=request.region
+    )
+    return await execute_generate_chart(
+        chart_type=request.chart_type,
+        data=request.data,
+        title=request.title,
+        x_field=request.x_field,
+        y_field=request.y_field,
+        color_field=request.color_field,
+        ctx=ctx,
+        render_image=True
+    )
+
+
+@app.get("/charts/{filename}")
+async def get_chart_image(filename: str):
+    """Serve rendered chart images."""
+    from fastapi.responses import FileResponse
+    charts_dir = os.path.join(os.path.dirname(__file__), "charts")
+    chart_path = os.path.join(charts_dir, filename)
+    
+    if not os.path.exists(chart_path):
+        raise HTTPException(status_code=404, detail="Chart not found")
+    
+    return FileResponse(chart_path, media_type="image/png")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
+

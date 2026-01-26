@@ -108,6 +108,7 @@ class Answer(BaseModel):
     approval_reason: Optional[str] = None
     confidence: float = 0.0
     latency_ms: int = 0
+    chart_url: Optional[str] = None
 
 
 class ReplayTimeline(BaseModel):
@@ -141,6 +142,7 @@ class AgentState(TypedDict):
     # Tool results
     sql_result: dict
     chart_spec: dict
+    chart_image_path: str
     
     # Decision tracking
     policy_decision: str
@@ -261,8 +263,39 @@ class MCPClient:
             **ctx
         })
     
+    async def generate_chart(
+        self, 
+        chart_type: str, 
+        data: list[dict], 
+        title: str, 
+        x_field: str, 
+        y_field: str, 
+        ctx: dict,
+        color_field: str = None
+    ) -> dict:
+        """Generate chart with rendered image."""
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/api/generate_chart",
+                json={
+                    "chart_type": chart_type,
+                    "data": data,
+                    "title": title,
+                    "x_field": x_field,
+                    "y_field": y_field,
+                    "color_field": color_field,
+                    **ctx
+                }
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error("Chart generation failed", error=str(e))
+            return {"error": str(e)}
+    
     async def close(self):
         await self.client.aclose()
+
 
 
 # Global clients
@@ -522,6 +555,105 @@ async def validate_results(state: AgentState) -> AgentState:
     return state
 
 
+async def generate_chart(state: AgentState) -> AgentState:
+    """Generate chart if question type is chart and we have SQL data."""
+    if state["question_type"] != "chart":
+        return state
+    
+    sql_result = state.get("sql_result", {})
+    if not sql_result.get("success") or not sql_result.get("data"):
+        logger.warning("Cannot generate chart - no SQL data available")
+        return state
+    
+    ctx = state["user_context"]
+    data = sql_result["data"]
+    columns = sql_result.get("columns", [])
+    
+    # Infer chart fields from data
+    if len(columns) < 2:
+        logger.warning("Cannot generate chart - need at least 2 columns")
+        return state
+    
+    # First column is typically x-axis (dimension), second is y-axis (measure)
+    x_field = columns[0]
+    y_field = columns[1]
+    color_field = columns[2] if len(columns) > 2 else None
+    
+    # Determine chart type from question
+    question_lower = state["question"].lower()
+    if "line" in question_lower or "trend" in question_lower or "over time" in question_lower:
+        chart_type = "line"
+    elif "pie" in question_lower:
+        chart_type = "arc"  # Vega-Lite uses "arc" for pie charts
+    elif "area" in question_lower:
+        chart_type = "area"
+    else:
+        chart_type = "bar"
+    
+    # Generate title from question
+    title = state["question"][:50]
+    if len(state["question"]) > 50:
+        title += "..."
+    
+    tool_calls = state.get("tool_calls", [])
+    evidence = state.get("evidence", [])
+    
+    try:
+        start_time = time.time()
+        result = await mcp_client.generate_chart(
+            chart_type=chart_type,
+            data=data[:50],  # Limit to 50 data points for readability
+            title=title,
+            x_field=x_field,
+            y_field=y_field,
+            ctx=ctx,
+            color_field=color_field
+        )
+        latency = int((time.time() - start_time) * 1000)
+        
+        if result.get("error"):
+            logger.error("Chart generation failed", error=result["error"])
+            tool_calls.append(ToolCall(
+                tool="generate_chart",
+                inputs={"chart_type": chart_type, "data_points": len(data)},
+                outputs={"error": result["error"]},
+                decision="ERROR",
+                latency_ms=latency
+            ).model_dump())
+        else:
+            state["chart_spec"] = result
+            state["chart_image_path"] = result.get("artifact_url", "")
+            
+            tool_calls.append(ToolCall(
+                tool="generate_chart",
+                inputs={"chart_type": chart_type, "data_points": len(data)},
+                outputs={"rendered": bool(result.get("artifact_url")), "data_hash": result.get("data_hash")},
+                decision="ALLOW",
+                latency_ms=latency
+            ).model_dump())
+            
+            evidence.append(Evidence(
+                type="chart",
+                source=f"{chart_type.title()} Chart",
+                content=f"Generated chart: {title}",
+                relevance=1.0
+            ).model_dump())
+            
+            logger.info("Chart generated", 
+                       chart_type=chart_type, 
+                       path=result.get("artifact_url"),
+                       data_points=len(data))
+        
+        state["tool_calls"] = tool_calls
+        state["evidence"] = evidence
+        
+    except Exception as e:
+        logger.error("Chart generation failed", error=str(e))
+        state["error"] = str(e)
+    
+    return state
+
+
 async def compose_answer(state: AgentState) -> AgentState:
     """Compose the final answer from evidence."""
     question = state["question"]
@@ -588,6 +720,7 @@ def build_agent_graph() -> StateGraph:
     workflow.add_node("retrieve_context", retrieve_context)
     workflow.add_node("plan_query", plan_query)
     workflow.add_node("execute_tools", execute_tools)
+    workflow.add_node("generate_chart", generate_chart)
     workflow.add_node("validate_results", validate_results)
     workflow.add_node("compose_answer", compose_answer)
     
@@ -602,15 +735,18 @@ def build_agent_graph() -> StateGraph:
         "execute_tools",
         should_continue,
         {
-            "continue": "validate_results",
+            "continue": "generate_chart",
             "compose": "compose_answer"
         }
     )
     
+    # Chart generation leads to validation
+    workflow.add_edge("generate_chart", "validate_results")
     workflow.add_edge("validate_results", "compose_answer")
     workflow.add_edge("compose_answer", END)
     
     return workflow.compile()
+
 
 
 # Build the graph
@@ -717,6 +853,7 @@ async def ask_question(question: Question, background_tasks: BackgroundTasks):
         "query_analysis": {},
         "sql_result": {},
         "chart_spec": {},
+        "chart_image_path": "",
         "policy_decision": "",
         "approval_required": False,
         "approval_reason": "",
@@ -742,7 +879,8 @@ async def ask_question(question: Question, background_tasks: BackgroundTasks):
             requires_approval=result.get("approval_required", False),
             approval_reason=result.get("approval_reason"),
             confidence=result.get("confidence", 0.0),
-            latency_ms=latency_ms
+            latency_ms=latency_ms,
+            chart_url=result.get("chart_image_path") or None
         )
         
         # Save trace in background
