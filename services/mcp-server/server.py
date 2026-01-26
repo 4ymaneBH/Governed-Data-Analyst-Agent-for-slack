@@ -4,14 +4,10 @@ Provides tools for SQL execution, document search, metric lookup, and chart gene
 with full policy enforcement via OPA and audit logging.
 """
 
-import asyncio
 import hashlib
 import json
-import logging
 import os
 import re
-import shutil
-import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
