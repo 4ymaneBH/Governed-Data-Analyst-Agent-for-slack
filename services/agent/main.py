@@ -13,7 +13,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
-from typing import Any, Annotated, Optional, TypedDict
+from typing import Any, Optional, TypedDict
 
 import asyncpg
 import httpx

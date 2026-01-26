@@ -4,10 +4,8 @@ Slack Bolt application for handling /askdata command and interactive components.
 """
 
 import asyncio
-import json
 import logging
 import os
-from datetime import datetime
 from typing import Optional
 
 import httpx
