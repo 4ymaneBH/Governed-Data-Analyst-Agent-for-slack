@@ -21,13 +21,16 @@ jobs:
         run: |
           pip install ruff mypy
           pip install -r services/agent/requirements.txt
-          pip install -r services/mcp-server/requirements.txt
+          pip install -r services/mcp_server/requirements.txt
       
       - name: Lint with ruff
         run: ruff check services/
 
       - name: Type check with mypy
         run: mypy services/ --ignore-missing-imports || true
+
+      - name: Run unit tests
+        run: pytest
 
   policy-tests:
     runs-on: ubuntu-latest
@@ -48,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Build MCP Server
-        run: docker build -t mcp-server services/mcp-server/
+        run: docker build -t mcp-server services/mcp_server/
       
       - name: Build Agent Service
         run: docker build -t agent services/agent/
@@ -57,7 +60,7 @@ jobs:
         run: docker build -t admin-ui apps/admin-ui/
       
       - name: Build Slack App
-        run: docker build -t slack-app services/slack-app/
+        run: docker build -t slack-app services/slack_app/
 
   integration-test:
     runs-on: ubuntu-latest
@@ -93,7 +96,7 @@ jobs:
       - name: Install test dependencies
         run: |
           pip install pytest pytest-asyncio httpx
-          pip install -r services/mcp-server/requirements.txt
+          pip install -r services/mcp_server/requirements.txt
       
       - name: Initialize database
         run: |
