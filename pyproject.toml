@@ -1,0 +1,24 @@
+[project]
+name = "governed-data-analyst-agent"
+version = "0.1.0"
+description = "Governed Data Analyst Agent with RBAC and RLS"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["apps", "infra", "docs", "data", "policies"]
+pythonpath = "."
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
