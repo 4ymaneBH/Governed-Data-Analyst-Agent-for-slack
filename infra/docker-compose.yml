@@ -16,7 +16,7 @@ services:
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analyst}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-analyst}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -36,7 +36,7 @@ services:
     volumes:
       - ../policies/rego:/policies
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8181/health"]
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8181/health" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -55,13 +55,13 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     # Remove GPU section if not available - will fall back to CPU
 
-  # MCP Tool Server
+    # MCP Tool Server
   mcp-server:
     build:
-      context: ../services/mcp-server
+      context: ../services/mcp_server
       dockerfile: Dockerfile
     container_name: analyst-mcp-server
     ports:
@@ -99,7 +99,7 @@ services:
   # Slack App Service
   slack-app:
     build:
-      context: ../services/slack-app
+      context: ../services/slack_app
       dockerfile: Dockerfile
     container_name: analyst-slack-app
     ports:
@@ -131,6 +131,7 @@ services:
 volumes:
   postgres_data:
   ollama_data:
+
 
 networks:
   default:

@@ -20,9 +20,15 @@ import structlog
 import vl_convert as vlc
 from fastapi import FastAPI, HTTPException
 from mcp.server import Server
-from mcp.server.fastapi import create_mcp_router
+# from mcp.server.fastapi import create_mcp_router  # TODO: Update for mcp>=1.0.0
 from mcp.types import Tool, TextContent
 from pydantic import BaseModel, Field
+
+from .models import (
+    ToolContext, PolicyInput, PolicyDecision, SQLResult, 
+    DocResult, MetricDefinition, ChartSpec
+)
+from .analysis import QueryAnalyzer
 
 # Configure structured logging
 structlog.configure(
@@ -58,79 +64,7 @@ db_pool: Optional[asyncpg.Pool] = None
 # Pydantic Models
 # =============================================================================
 
-class ToolContext(BaseModel):
-    """Context for tool execution including user info and request tracking."""
-    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    slack_user_id: str
-    role: str
-    region: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-class PolicyInput(BaseModel):
-    """Input for OPA policy evaluation."""
-    user_id: str
-    role: str
-    region: Optional[str] = None
-    tool: str
-    tables: list[dict] = []
-    columns: list[str] = []
-    query_type: Optional[str] = None
-    row_count: Optional[int] = None
-    has_limit: bool = True
-    metadata: dict = {}
-
-
-class PolicyDecision(BaseModel):
-    """Result from OPA policy evaluation."""
-    decision: str  # ALLOW, DENY, REQUIRE_APPROVAL
-    rule_ids: list[str] = []
-    reason: Optional[str] = None
-    constraints: dict = {}  # e.g., {"masked_columns": ["email"], "max_rows": 100}
-
-
-class SQLResult(BaseModel):
-    """Result from SQL execution."""
-    success: bool
-    data: list[dict] = []
-    columns: list[str] = []
-    row_count: int = 0
-    query_id: str = ""
-    latency_ms: int = 0
-    query_preview: Optional[str] = None
-    error: Optional[str] = None
-
-
-class DocResult(BaseModel):
-    """Result from document search."""
-    doc_id: str
-    title: str
-    snippet: str
-    score: float
-    section: Optional[str] = None
-    metadata: dict = {}
-
-
-class MetricDefinition(BaseModel):
-    """Metric definition from registry."""
-    name: str
-    display_name: str
-    description: str
-    owner: Optional[str] = None
-    formula: Optional[str] = None
-    sql_template: Optional[str] = None
-    dimensions: list[str] = []
-    tags: list[str] = []
-
-
-class ChartSpec(BaseModel):
-    """Chart specification."""
-    chart_type: str
-    title: str
-    vega_lite_spec: dict
-    data_hash: str
-    artifact_url: Optional[str] = None
+# Models moved to models.py
 
 
 # =============================================================================
@@ -311,66 +245,7 @@ class AuditLogger:
 # SQL Query Analyzer
 # =============================================================================
 
-class QueryAnalyzer:
-    """Analyze SQL queries for governance checks."""
-    
-    # Dangerous patterns
-    DDL_PATTERNS = re.compile(
-        r'\b(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b',
-        re.IGNORECASE
-    )
-    DML_PATTERNS = re.compile(
-        r'\b(INSERT|UPDATE|DELETE|MERGE)\b',
-        re.IGNORECASE
-    )
-    
-    # Table extraction pattern
-    TABLE_PATTERN = re.compile(
-        r'\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)'
-        r'|\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)',
-        re.IGNORECASE
-    )
-    
-    # Column extraction (simplified)
-    SELECT_STAR_PATTERN = re.compile(r'\bSELECT\s+\*', re.IGNORECASE)
-    
-    # Limit check
-    LIMIT_PATTERN = re.compile(r'\bLIMIT\s+\d+', re.IGNORECASE)
-    AGGREGATE_PATTERN = re.compile(
-        r'\b(COUNT|SUM|AVG|MIN|MAX|GROUP\s+BY)\b',
-        re.IGNORECASE
-    )
-    
-    @classmethod
-    def analyze(cls, query: str) -> dict:
-        """Analyze SQL query and extract metadata."""
-        result = {
-            "is_ddl": bool(cls.DDL_PATTERNS.search(query)),
-            "is_dml": bool(cls.DML_PATTERNS.search(query)),
-            "has_select_star": bool(cls.SELECT_STAR_PATTERN.search(query)),
-            "has_limit": bool(cls.LIMIT_PATTERN.search(query)),
-            "is_aggregate": bool(cls.AGGREGATE_PATTERN.search(query)),
-            "tables": [],
-            "query_type": "SELECT"
-        }
-        
-        # Determine query type
-        if result["is_ddl"]:
-            result["query_type"] = "DDL"
-        elif result["is_dml"]:
-            result["query_type"] = "DML"
-        
-        # Extract tables
-        for match in cls.TABLE_PATTERN.finditer(query):
-            table = match.group(1) or match.group(2)
-            if table:
-                parts = table.split(".")
-                if len(parts) == 2:
-                    result["tables"].append({"schema": parts[0], "table": parts[1]})
-                else:
-                    result["tables"].append({"schema": "public", "table": parts[0]})
-        
-        return result
+# QueryAnalyzer moved to analysis.py
 
 
 # =============================================================================
