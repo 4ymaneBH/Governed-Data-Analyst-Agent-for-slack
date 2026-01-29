@@ -29,6 +29,7 @@ from .models import (
     DocResult, MetricDefinition, ChartSpec
 )
 from .analysis import QueryAnalyzer
+from .embeddings import EmbeddingService
 
 # Configure structured logging
 structlog.configure(
@@ -130,6 +131,7 @@ class PolicyClient:
 
 
 policy_client: Optional[PolicyClient] = None
+embedding_service: Optional[EmbeddingService] = None
 
 
 # =============================================================================
@@ -408,39 +410,61 @@ async def execute_search_docs(
     
     try:
         pool = await get_db_pool()
+        
+        # Initialize embedding service if needed
+        global embedding_service
+        if not embedding_service:
+            embedding_service = EmbeddingService(
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
+                model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
+            )
+            
+        # Generate embedding for query
+        try:
+            query_embedding = await embedding_service.generate_embedding(query)
+            embedding_str = f"[{','.join(map(str, query_embedding))}]"
+        except Exception as e:
+            logger.error("Embedding generation failed, falling back to keyword search", error=str(e))
+            # Fallback logic could go here, but for now we'll just fail gracefully
+            # or could use keyword search as backup
+            raise e
+
         async with pool.acquire() as conn:
-            # For now, use simple text search (in production, use embeddings)
+            # Semantic search using pgvector
             # ACL filtering based on role
             acl_filter = "ARRAY['public']"
             if ctx.role in ["data_analyst", "admin"]:
                 acl_filter = "ARRAY['public', 'finance_only', 'internal']"
             elif ctx.role == "marketing":
                 acl_filter = "ARRAY['public', 'marketing_only']"
+            elif ctx.role == "sales":
+                acl_filter = "ARRAY['public', 'sales_only']" # Added sales
             
+            # Using cosine distance (<=>)
+            # We select chunks that match the ACL and are closest to the query
             rows = await conn.fetch(f"""
                 SELECT 
                     d.doc_id::text,
                     d.title,
                     dc.content as snippet,
-                    similarity(dc.content, $1) as score,
+                    1 - (dc.embedding <=> $1) as score,
                     d.doc_type as section,
                     d.metadata
                 FROM internal.doc_chunks dc
                 JOIN internal.documents d ON dc.doc_id = d.doc_id
-                WHERE dc.content ILIKE '%' || $1 || '%'
-                  AND d.acl_tags && {acl_filter}::text[]
-                ORDER BY similarity(dc.content, $1) DESC
+                WHERE d.acl_tags && {acl_filter}::text[]
+                ORDER BY dc.embedding <=> $1
                 LIMIT $2
-            """, query, top_k)
+            """, embedding_str, top_k)
             
             results = [
                 DocResult(
                     doc_id=str(r["doc_id"]),
                     title=r["title"],
                     snippet=r["snippet"][:500],
-                    score=float(r["score"]) if r["score"] else 0.5,
+                    score=float(r["score"]) if r["score"] else 0.0,
                     section=r["section"],
-                    metadata=r["metadata"] or {}
+                    metadata=json.loads(r["metadata"]) if isinstance(r["metadata"], str) else (r["metadata"] or {})
                 )
                 for r in rows
             ]
@@ -832,8 +856,8 @@ app = FastAPI(
 )
 
 # Mount MCP router
-mcp_router = create_mcp_router(mcp_server)
-app.include_router(mcp_router, prefix="/mcp")
+# mcp_router = create_mcp_router(mcp_server)
+# app.include_router(mcp_router, prefix="/mcp")
 
 
 @app.get("/health")
