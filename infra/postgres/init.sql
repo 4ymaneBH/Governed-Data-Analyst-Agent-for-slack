@@ -188,7 +188,7 @@ CREATE TABLE internal.doc_chunks (
     doc_id UUID NOT NULL REFERENCES internal.documents(doc_id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
     content TEXT NOT NULL,
-    embedding vector(1536),  -- OpenAI ada-002 dimension, adjust for Ollama
+    embedding vector(768),  -- nomic-embed-text dimension
     token_count INTEGER,
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
