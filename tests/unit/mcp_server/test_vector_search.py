@@ -1,6 +1,11 @@
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from services.mcp_server.server import execute_search_docs, ToolContext, DocResult
+
+from services.mcp_server.models import PolicyDecision
+from services.mcp_server.server import ToolContext, execute_search_docs
+
 
 @pytest.mark.asyncio
 async def test_search_docs_vector():
@@ -9,12 +14,12 @@ async def test_search_docs_vector():
         user_id="test-user",
         slack_user_id="U123",
         role="data_analyst",
-        request_id="req-123"
+        request_id=str(uuid.uuid4())
     )
     
     # Mock PolicyClient to allow access
     mock_policy = AsyncMock()
-    mock_policy.evaluate.return_value.decision = "ALLOW"
+    mock_policy.evaluate.return_value = PolicyDecision(decision="ALLOW")
     
     # Mock EmbeddingService
     mock_embedding = AsyncMock()
@@ -58,3 +63,30 @@ async def test_search_docs_vector():
         call_args = mock_conn.fetch.call_args
         sql_query = call_args[0][0]
         assert "<=>" in sql_query
+        assert "INSERT INTO internal.audit_logs" in mock_conn.execute.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_search_docs_denied_before_embedding():
+    ctx = ToolContext(
+        user_id="test-user",
+        slack_user_id="U123",
+        role="intern",
+        request_id=str(uuid.uuid4()),
+    )
+    mock_policy = AsyncMock()
+    mock_policy.evaluate.return_value = PolicyDecision(
+        decision="DENY", reason="Access denied by policy"
+    )
+    mock_embedding = AsyncMock()
+
+    with (
+        patch("services.mcp_server.server.policy_client", mock_policy),
+        patch("services.mcp_server.server.embedding_service", mock_embedding),
+        patch("services.mcp_server.server.AuditLogger.log", new_callable=AsyncMock) as audit_log,
+    ):
+        results = await execute_search_docs("restricted query", ctx)
+
+    assert results == []
+    mock_embedding.generate_embedding.assert_not_awaited()
+    audit_log.assert_awaited_once()

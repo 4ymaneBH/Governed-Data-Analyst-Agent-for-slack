@@ -5,6 +5,9 @@ package analyst.rows
 
 import rego.v1
 
+default constraints := {}
+default rule_ids := []
+
 # Constraints for RLS filtering
 constraints := {"region_filter": input.region} if {
     input.role == "sales"

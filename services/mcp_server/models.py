@@ -1,7 +1,9 @@
-from datetime import datetime
-from typing import Optional, Any
 import uuid
+from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel, Field
+
 
 class ToolContext(BaseModel):
     """Context for tool execution including user info and request tracking."""

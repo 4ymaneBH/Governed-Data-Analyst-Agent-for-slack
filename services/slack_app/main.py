@@ -4,14 +4,14 @@ Slack Bolt application for handling /askdata command and interactive components.
 """
 
 import asyncio
-import logging
+import json
 import os
 from typing import Optional
 
 import httpx
 import structlog
-from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+from slack_bolt.async_app import AsyncApp
 
 # Configure structured logging
 structlog.configure(
@@ -143,7 +143,10 @@ def build_response_blocks(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"⚠️ *Approval Required*\n\n{approval_reason}\n\nYour request has been sent to an admin for approval."
+                "text": (
+                    f"⚠️ *Approval Required*\n\n{approval_reason}\n\n"
+                    "An admin must review this request."
+                )
             }
         })
         return blocks
@@ -174,7 +177,7 @@ def build_response_blocks(
         blocks.append({"type": "divider"})
         
         source_text = "*Sources:*\n"
-        for i, e in enumerate(evidence[:5], 1):
+        for e in evidence[:5]:
             source_text += f"• [{e.get('type', 'unknown')}] {e.get('source', 'Unknown')}\n"
         
         blocks.append({
@@ -344,13 +347,21 @@ def build_replay_blocks(replay_data: dict) -> list:
     ]
     
     for i, step in enumerate(replay_data.get("steps", []), 1):
-        decision_emoji = "✅" if step.get("decision") == "ALLOW" else "❌" if step.get("decision") == "DENY" else "⏳"
+        decision_emoji = (
+            "✅" if step.get("decision") == "ALLOW"
+            else "❌" if step.get("decision") == "DENY"
+            else "⏳"
+        )
         blocks.append({
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"{i}. {decision_emoji} *{step.get('tool', 'unknown')}* - {step.get('decision', 'N/A')} ({step.get('latency_ms', 0)}ms)"
+                    "text": (
+                        f"{i}. {decision_emoji} *{step.get('tool', 'unknown')}* - "
+                        f"{step.get('decision', 'N/A')} "
+                        f"({step.get('latency_ms', 0)}ms)"
+                    )
                 }
             ]
         })
@@ -440,7 +451,9 @@ async def get_replay(request_id: str) -> dict:
         return {"error": str(e)}
 
 
-async def send_approval_callback(request_id: str, approved: bool, approver_id: str, reason: str = None):
+async def send_approval_callback(
+    request_id: str, approved: bool, approver_id: str, reason: str = None
+):
     """Send approval decision to agent service."""
     try:
         response = await http_client.post(
@@ -527,28 +540,7 @@ async def handle_askdata_command(ack, command, client, respond):
             text="Your request requires approval"
         )
         
-        # Send approval request to admin channel
-        try:
-            user_info = await client.users_info(user=user_id)
-            user_name = user_info["user"]["real_name"]
-        except:
-            user_name = user_id
-        
-        approval_blocks = build_approval_request_blocks(
-            request_id=request_id,
-            user_id=user_id,
-            user_name=user_name,
-            question=question,
-            reason=result.get("approval_reason", "Sensitive data access")
-        )
-        
-        # Post to admin channel (you'd configure this channel)
-        # await client.chat_postMessage(
-        #     channel=ADMIN_CHANNEL,
-        #     blocks=approval_blocks,
-        #     text=f"Approval request from {user_name}"
-        # )
-        
+        # Approval delivery is not yet wired to the admin channel.
         return
     
     # Build and send response
@@ -612,7 +604,10 @@ async def handle_show_sql(ack, body, client):
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"*SQL Query:*\n```sql\n{step.get('inputs', {}).get('query', 'N/A')}\n```"
+                            "text": (
+                                "*SQL Query:*\n```sql\n"
+                                f"{step.get('inputs', {}).get('query', 'N/A')}\n```"
+                            )
                         }
                     }
                 ],
@@ -749,6 +744,12 @@ async def handle_deny_request(ack, body, client):
     
     # Send denial to agent
     result = await send_approval_callback(request_id, False, approver_id, "Request denied by admin")
+    if "error" in result:
+        await client.chat_postMessage(
+            channel=channel_id,
+            text=f"Failed to process denial: {result['error']}",
+        )
+        return
     
     # Update the original message
     await client.chat_update(
@@ -783,7 +784,10 @@ async def handle_app_mention(event, say, client):
     question = text.split(">", 1)[-1].strip() if ">" in text else text
     
     if not question:
-        await say("Hi! You can ask me data questions. Try: `@DataAnalyst What was our revenue last month?`")
+        await say(
+            "Hi! You can ask me data questions. "
+            "Try: `@DataAnalyst What was our revenue last month?`"
+        )
         return
     
     # Process like /askdata

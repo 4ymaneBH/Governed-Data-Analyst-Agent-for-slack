@@ -4,9 +4,7 @@ FastAPI service with LangGraph workflow for processing user questions.
 Uses Ollama for local LLM inference.
 """
 
-import asyncio
 import json
-import logging
 import os
 import time
 import uuid
@@ -18,9 +16,8 @@ from typing import Any, Optional, TypedDict
 import asyncpg
 import httpx
 import structlog
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
+from fastapi import BackgroundTasks, FastAPI, HTTPException
+from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 
 # Configure structured logging
@@ -324,8 +321,10 @@ Respond with just the category name (metric, sql_analysis, document, or chart):"
 SQL_GENERATION_PROMPT = """Generate a SQL query to answer this question.
 
 Available tables:
-- reporting.daily_kpis (date, region, channel, revenue, marketing_spend, new_customers, churned_customers, active_users, cac, churn_rate, mrr, arr)
-- reporting.customers (customer_id, region, industry, plan, status, mrr, arr, signup_date, last_active_date, employee_count)
+- reporting.daily_kpis (date, region, channel, revenue, marketing_spend, new_customers,
+  churned_customers, active_users, cac, churn_rate, mrr, arr)
+- reporting.customers (customer_id, region, industry, plan, status, mrr, arr,
+  signup_date, last_active_date, employee_count)
 - reporting.monthly_kpis (view: month, region, aggregated metrics)
 - reporting.customer_summary (view: by region and industry)
 
@@ -335,14 +334,16 @@ Question: {question}
 
 Respond with ONLY the SQL query, no explanation:"""
 
-ANSWER_PROMPT = """Based on the following evidence, provide a clear and helpful answer to the user's question.
+ANSWER_PROMPT = """Based on the following evidence, provide a clear and helpful answer
+to the user's question.
 
 Question: {question}
 
 Evidence:
 {evidence}
 
-Provide a professional, data-driven answer. Include specific numbers and cite sources where relevant.
+Provide a professional, data-driven answer. Include specific numbers and cite sources
+where relevant.
 If the data shows trends, explain them. Keep your response focused and actionable."""
 
 
@@ -424,7 +425,10 @@ async def retrieve_context(state: AgentState) -> AgentState:
                     evidence.append(Evidence(
                         type="metric",
                         source=metric.get("display_name", keyword),
-                        content=f"{metric.get('description', '')} Formula: {metric.get('formula', 'N/A')}",
+                        content=(
+                            f"{metric.get('description', '')} "
+                            f"Formula: {metric.get('formula', 'N/A')}"
+                        ),
                         relevance=1.0
                     ).model_dump())
                 break
@@ -523,7 +527,10 @@ async def execute_tools(state: AgentState) -> AgentState:
         tool_calls.append(ToolCall(
             tool="run_sql",
             inputs={"query": query[:200]},
-            outputs={"row_count": result.get("row_count", 0), "success": result.get("success", False)},
+            outputs={
+                "row_count": result.get("row_count", 0),
+                "success": result.get("success", False),
+            },
             decision=state.get("policy_decision", "UNKNOWN"),
             latency_ms=latency
         ).model_dump())
@@ -627,7 +634,10 @@ async def generate_chart(state: AgentState) -> AgentState:
             tool_calls.append(ToolCall(
                 tool="generate_chart",
                 inputs={"chart_type": chart_type, "data_points": len(data)},
-                outputs={"rendered": bool(result.get("artifact_url")), "data_hash": result.get("data_hash")},
+                outputs={
+                    "rendered": bool(result.get("artifact_url")),
+                    "data_hash": result.get("data_hash"),
+                },
                 decision="ALLOW",
                 latency_ms=latency
             ).model_dump())
@@ -661,18 +671,25 @@ async def compose_answer(state: AgentState) -> AgentState:
     
     # Handle denial
     if state.get("policy_decision") == "DENY":
-        state["final_answer"] = f"I'm unable to answer this question. {state.get('error', 'Access denied.')}"
+        state["final_answer"] = (
+            f"I'm unable to answer this question. {state.get('error', 'Access denied.')}"
+        )
         return state
     
     # Handle approval required
     if state.get("approval_required"):
-        state["final_answer"] = f"This request requires approval. {state.get('approval_reason', '')}"
+        state["final_answer"] = (
+            f"This request requires approval. {state.get('approval_reason', '')}"
+        )
         return state
     
     # Format evidence for prompt
     evidence_text = ""
     for i, e in enumerate(evidence, 1):
-        evidence_text += f"\n{i}. [{e.get('type', 'unknown')}] {e.get('source', 'Unknown')}:\n{e.get('content', '')}\n"
+        evidence_text += (
+            f"\n{i}. [{e.get('type', 'unknown')}] {e.get('source', 'Unknown')}:"
+            f"\n{e.get('content', '')}\n"
+        )
     
     if not evidence_text:
         evidence_text = "No specific data found."
@@ -903,7 +920,7 @@ async def ask_question(question: Question, background_tasks: BackgroundTasks):
         
     except Exception as e:
         logger.error("Agent execution failed", error=str(e), request_id=question.request_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/replay/{request_id}", response_model=ReplayTimeline)
@@ -958,7 +975,7 @@ async def get_replay(request_id: str):
         raise
     except Exception as e:
         logger.error("Replay retrieval failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/approval/callback")
@@ -992,7 +1009,7 @@ async def approval_callback(
         
     except Exception as e:
         logger.error("Approval callback failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 if __name__ == "__main__":

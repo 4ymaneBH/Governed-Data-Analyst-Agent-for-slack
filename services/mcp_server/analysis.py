@@ -1,5 +1,6 @@
 import re
 
+
 class QueryAnalyzer:
     """Analyze SQL queries for governance checks."""
     

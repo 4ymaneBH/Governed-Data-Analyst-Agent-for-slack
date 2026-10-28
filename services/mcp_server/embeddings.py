@@ -1,7 +1,8 @@
 import os
+from typing import List
+
 import httpx
 import structlog
-from typing import List, Optional
 
 logger = structlog.get_logger()
 
@@ -29,7 +30,7 @@ class EmbeddingService:
         except httpx.HTTPError as e:
             logger.error("Embedding generation failed", error=str(e), model=self.model)
             # Return zero vector or raise depending on policy
-            raise RuntimeError(f"Failed to generate embedding: {str(e)}")
+            raise RuntimeError(f"Failed to generate embedding: {str(e)}") from e
 
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for a batch of texts."""

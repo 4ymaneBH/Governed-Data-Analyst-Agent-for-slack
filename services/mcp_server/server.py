@@ -11,8 +11,7 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 import asyncpg
 import httpx
@@ -20,16 +19,22 @@ import structlog
 import vl_convert as vlc
 from fastapi import FastAPI, HTTPException
 from mcp.server import Server
-# from mcp.server.fastapi import create_mcp_router  # TODO: Update for mcp>=1.0.0
-from mcp.types import Tool, TextContent
-from pydantic import BaseModel, Field
 
-from .models import (
-    ToolContext, PolicyInput, PolicyDecision, SQLResult, 
-    DocResult, MetricDefinition, ChartSpec
-)
+# from mcp.server.fastapi import create_mcp_router  # TODO: Update for mcp>=1.0.0
+from mcp.types import TextContent, Tool
+from pydantic import BaseModel
+
 from .analysis import QueryAnalyzer
 from .embeddings import EmbeddingService
+from .models import (
+    ChartSpec,
+    DocResult,
+    MetricDefinition,
+    PolicyDecision,
+    PolicyInput,
+    SQLResult,
+    ToolContext,
+)
 
 # Configure structured logging
 structlog.configure(
@@ -424,7 +429,7 @@ async def execute_search_docs(
             query_embedding = await embedding_service.generate_embedding(query)
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
         except Exception as e:
-            logger.error("Embedding generation failed, falling back to keyword search", error=str(e))
+            logger.error("Embedding generation failed", error=str(e))
             # Fallback logic could go here, but for now we'll just fail gracefully
             # or could use keyword search as backup
             raise e
@@ -464,7 +469,11 @@ async def execute_search_docs(
                     snippet=r["snippet"][:500],
                     score=float(r["score"]) if r["score"] else 0.0,
                     section=r["section"],
-                    metadata=json.loads(r["metadata"]) if isinstance(r["metadata"], str) else (r["metadata"] or {})
+                    metadata=(
+                        json.loads(r["metadata"])
+                        if isinstance(r["metadata"], str)
+                        else (r["metadata"] or {})
+                    )
                 )
                 for r in rows
             ]

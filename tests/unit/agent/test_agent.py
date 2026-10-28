@@ -1,6 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, patch
-from services.agent.main import parse_intent, AgentState
+
+import pytest
+
+from services.agent.main import AgentState, parse_intent
+
 
 @pytest.mark.asyncio
 async def test_parse_intent_metric():

@@ -5,8 +5,10 @@ package analyst.columns
 
 import rego.v1
 
-default allow := true
+default allow := false
 default deny_reason := ""
+default constraints := {}
+default rule_ids := []
 
 # PII columns that require special handling
 pii_columns := {

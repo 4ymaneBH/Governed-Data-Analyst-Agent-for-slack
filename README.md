@@ -116,7 +116,15 @@ python -m pip install httpx
 python eval/runner.py
 ```
 
-The runner writes `eval/report.md`. CI also runs Python checks, policy tests, and Docker builds; its integration test job is currently a placeholder.
+The runner writes `eval/report.md`. To run the local checks:
+
+```bash
+ruff check services/ tests/
+python -m pytest -q tests/unit
+opa test policies/rego/ -v
+```
+
+CI runs these checks, builds the service images, then exercises the REST SQL endpoint against PostgreSQL and OPA. The integration tests in `tests/integration/` run when `RUN_INTEGRATION=1` and both services are available.
 
 ## Project layout
 

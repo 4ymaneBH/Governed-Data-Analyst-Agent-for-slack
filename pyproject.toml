@@ -9,6 +9,7 @@ testpaths = ["tests"]
 norecursedirs = ["apps", "infra", "docs", "data", "policies"]
 pythonpath = "."
 asyncio_mode = "auto"
+markers = ["integration: requires PostgreSQL and OPA services"]
 
 [tool.ruff]
 line-length = 100

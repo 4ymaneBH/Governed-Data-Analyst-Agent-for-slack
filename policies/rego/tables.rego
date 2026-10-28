@@ -5,7 +5,7 @@ package analyst.tables
 
 import rego.v1
 
-default allow := true
+default allow := false
 default deny_reason := ""
 
 # Schema access by role
@@ -65,7 +65,7 @@ no_blocked_tables if {
 
 no_blocked_tables if {
     input.tool == "run_sql"
-    not blocked := blocked_tables[input.role]
+    not blocked_tables[input.role]
 }
 
 no_blocked_tables if {
